@@ -1,0 +1,1010 @@
+title,challenge_text,display_text,invocation_timestamp,iteration_num,gold_query_text,generated_sql_query_text,generated_semantic_query_text,gold_query_df,generated_sql_df,generated_semantic_df,is_sql_result_equivalent,is_semantic_result_equivalent,sql_comparison_exception,semantic_comparison_exception
+HQLS: Claim,How many claims do we have?,"How many
+claims do we have?",1700622946.2513137,0,"SELECT COUNT(*) AS NoOfClaims
+FROM claim",SELECT COUNT(*) FROM Claim;,"select * from {{
+    semantic_layer.query(metrics=['claims'])
+}}","   NOOFCLAIMS
+0           2","   COUNT(*)
+0         2","   CLAIMS
+0       2",true,true,,
+HQLS: Claim - Loss Payment&Loss Reserve,"What is the total loss amounts, which is the sum of loss payment, loss reserve amount by claim number?","What is the total loss amounts, which is the sum
+of loss payment, loss reserve amount by claim number?",1700622974.6398587,0,"SELECT
+    company_claim_number,
+    (ca_lp.claim_amount + ca_lr.claim_amount ) as LossAmount
+FROM
+    Claim
+    inner join claim_amount ca_lp on claim.claim_identifier = ca_lp.claim_identifier
+    inner JOIN loss_payment ON ca_lp.claim_amount_identifier = loss_payment.claim_amount_identifier
+    inner join claim_amount ca_lr on claim.claim_identifier = ca_lr.claim_identifier
+    inner JOIN loss_reserve ON ca_lr.claim_amount_identifier = loss_reserve.claim_amount_identifier
+","SELECT Claim.Claim_Identifier, 
+       SUM(Loss_Payment.Claim_Amount) as Loss_Payment_Total,
+       SUM(Loss_Reserve.Claim_Amount) as Loss_Reserve_Total,
+       (SUM(Loss_Payment.Claim_Amount) + SUM(Loss_Reserve.Claim_Amount)) as Total_Loss_Amount
+FROM Claim
+LEFT JOIN Claim_Amount as Loss_Payment ON Claim.Claim_Identifier = Loss_Payment.Claim_Identifier AND Loss_Payment.Claim_Amount_Identifier IN (SELECT Claim_Amount_Identifier FROM Loss_Payment)
+LEFT JOIN Claim_Amount as Loss_Reserve ON Claim.Claim_Identifier = Loss_Reserve.Claim_Identifier AND Loss_Reserve.Claim_Amount_Identifier IN (SELECT Claim_Amount_Identifier FROM Loss_Reserve)
+GROUP BY Claim.Claim_Identifier;","select * from {{
+    semantic_layer.query(metrics=['total_loss_amount'], 
+    group_by=['claim_identifier__company_claim_number'])
+    }}","   COMPANY_CLAIM_NUMBER  LOSSAMOUNT
+0              12312701        2200
+1              12312702        4400","   CLAIM_IDENTIFIER  LOSS_PAYMENT_TOTAL  LOSS_RESERVE_TOTAL  TOTAL_LOSS_AMOUNT
+0                 1                1200                1000               2200
+1                 2                2300                2100               4400","   CLAIM_IDENTIFIER__COMPANY_CLAIM_NUMBER  TOTAL_LOSS_AMOUNT
+0                                12312701               2200
+1                                12312702               4400",false,true,"""['COMPANY_CLAIM_NUMBER'] not in index""",
+HQLS: What is the average time to settle a claim by policy number?,What is the average time to settle a claim by policy number?,"What is the average time to
+settle a claim by policy number?",1700623019.8295748,0,"select policy_number, avg(DATE_DIFF(claim_open_date, claim_close_date, ""day""))
+from claim 
+inner join claim_coverage on claim.claim_identifier = claim_coverage.claim_identifier
+inner join policy_coverage_detail on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+where claim_close_date IS NOT NULL
+group by policy_number
+","SELECT 
+    Policy.Policy_Number, 
+    AVG(DATEDIFF(day, Claim.Claim_Open_Date, Claim.Claim_Close_Date)) AS Average_Days_To_Settle
+FROM 
+    Claim 
+INNER JOIN 
+    Claim_Coverage ON Claim.Claim_Identifier = Claim_Coverage.Claim_Identifier
+INNER JOIN 
+    Policy_Coverage_Detail ON Claim_Coverage.Policy_Coverage_Detail_Identifier = Policy_Coverage_Detail.Policy_Coverage_Detail_Identifier
+INNER JOIN 
+    Policy ON Policy_Coverage_Detail.Policy_Identifier = Policy.Policy_Identifier
+WHERE 
+    Claim.Claim_Close_Date IS NOT NULL
+GROUP BY 
+    Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['avg_time_to_settle_claim'], 
+    group_by=['policy__policy_number'])
+    }}","   POLICY_NUMBER  AVG(DATEDIFF(DAY, CLAIM_OPEN_DATE, CLAIM_CLOSE_DATE))
+0    31003000336                                               20.5    ","   POLICY_NUMBER AVERAGE_DAYS_TO_SETTLE
+0    31003000336              20.500000","                                                                                                                                                                                                                                                                                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['policy__policy_number'] cannot be resolved for metrics ['avg_time_to_settle_claim']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'policy__policy_number':\n    [] (InvalidArgument; Prepare)",true,false,,
+HQLS: Policy - Coverage - Premium,What is the average policy size which is the the total amount of premium divided by the number of policies?,"What is the average policy size which is the the
+total amount of premium divided by the number of policies?",1700623058.8340402,0,"SELECT
+    SUM(policy_amount)/COUNT(DISTINCT policy_number) AS avgPolicySize
+FROM
+   policy_coverage_detail 
+    inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join policy_amount on policy_coverage_detail.policy_coverage_detail_identifier = policy_amount.policy_coverage_detail_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+","SELECT AVG(Total_Premium / Num_Policies) as Average_Policy_Size
+FROM
+(
+    SELECT SUM(Policy_Amount) as Total_Premium, COUNT(DISTINCT Policy_Identifier) as Num_Policies
+    FROM Policy_Amount
+    INNER JOIN Premium
+    ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+) as SubQuery","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount', 'number_of_policies'], 
+    group_by=[Dimension('metric_time').grain('month')],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","  AVGPOLICYSIZE
+0  49000.000000","  AVERAGE_POLICY_SIZE
+0  49000.000000000000","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['policy_amount__has_premium'] cannot be resolved for metrics ['number_of_policies', 'total_policy_amount']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'policy_amount__has_premium':\n    ['policy__claim',\n     'policy__year_built__year',\n     'policy__expiration_date__quarter',\n     'policy__expiration_date__year',\n     'policy__status_code',\n     'policy__expiration_date__day'] (InvalidArgument; Prepare)",true,false,,
+HQLS: Policy - Agent,How many policies have agents sold by agent id?,"How many policies have
+agents sold by agent id?",1700623098.6161752,0,"select  party_identifier as agentid, count(policy.policy_number) as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'AG'
+group by party_identifier","SELECT Party_Identifier AS Agent_ID, COUNT(Policy_Identifier) AS Policies_Sold
+FROM Agreement_Party_Role
+WHERE Party_Role_Code = 'Agent'
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'AG'""
+    )}}","   AGENTID  NOOFPOLICIES
+0        2             2","                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 43\ninvalid identifier 'POLICY_IDENTIFIER' (InvalidArgument; Prepare)","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             2                   2",false,true,,
+HQLS: What is the total amount of premiums that a policy holder has paid?,What is the total amount of premiums that a policy holder has paid?,"What is the total amount of
+premiums that a policy holder has paid?",1700623130.8852859,0,"select party_identifier, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT SUM(Policy_Amount) AS Total_Premiums_Paid
+FROM Policy_Amount
+INNER JOIN Agreement_Party_Role ON Policy_Amount.Policy_Identifier = Agreement_Party_Role.Agreement_Identifier
+INNER JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+WHERE Party_Role_Code = 'Policy Holder';","select sum(total_policy_amount) from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'"")
+}}","   PARTY_IDENTIFIER  SUM(POLICY_AMOUNT)
+0                 1               98000","   TOTAL_PREMIUMS_PAID
+0                  NaN","   SUM(TOTAL_POLICY_AMOUNT)
+0                     98000",false,false,"""None of [Index(['PARTY_IDENTIFIER', 'SUM(POLICY_AMOUNT)'], dtype='object')] are in the [columns]""","""['PARTY_IDENTIFIER'] not in index"""
+HQLS: What is the total amount of premiums that a policy holder has paid by policy number?,What is the total amount of premiums that a policy holder has paid by policy number?,"What is the total amount of premiums that
+a policy holder has paid by policy number?",1700623168.5847642,0,"select party_identifier, policy_number, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier, policy_number","SELECT Policy.Policy_Number, SUM(Premium.Policy_Amount) AS Total_Premiums_Paid
+FROM Policy
+JOIN Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+GROUP BY Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number', 'policy__party_identifier_dim'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'"")
+    }}","   PARTY_IDENTIFIER  POLICY_NUMBER  SUM(POLICY_AMOUNT)
+0                 1    31003000336               86000
+1                 1    31003000337               12000","                                                                                                                                                     error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 33\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","   POLICY__PARTY_IDENTIFIER_DIM  POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0                             1            31003000336                86000
+1                             1            31003000337                12000",false,true,,
+HQLS: Policy - Policy Holder,How many policies does each policy holder have by policy holder id?,"How many policies does each
+policy holder have by policy holder id?",1700623206.442095,0,"select party_identifier, count( policy.policy_number)  as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT Agreement_Party_Role.Party_Identifier AS Policy_Holder_ID, COUNT(DISTINCT Policy.Policy_Identifier) AS Number_of_Policies
+FROM Agreement_Party_Role
+JOIN Policy ON Agreement_Party_Role.Agreement_Identifier = Policy.Policy_Identifier
+WHERE Agreement_Party_Role.Party_Role_Code = 'Policy Holder'
+GROUP BY Agreement_Party_Role.Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  NOOFPOLICIES
+0                 1             2","Empty DataFrame
+Columns: [POLICY_HOLDER_ID, NUMBER_OF_POLICIES]
+Index: []","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             1                   2",false,true,"""None of [Index(['NOOFPOLICIES', 'PARTY_IDENTIFIER'], dtype='object')] are in the [columns]""",
+HQLS: Policy - Coverage - Claim,How many claims have been placed by policy number?,"How many claims have
+been placed by policy number?",1700623245.2498045,0,"select policy_number, count(company_claim_number) as NoOfClaims
+from 
+    policy 
+    inner join policy_coverage_detail on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join claim_coverage on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+    inner join claim on claim.claim_identifier = claim_coverage.claim_identifier
+group by policy_number","SELECT Policy_Number, COUNT(*) as Number_of_Claims
+FROM Claim
+JOIN Policy ON Claim.Claim_Identifier = Policy.Policy_Identifier
+GROUP BY Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['claims'], 
+    group_by=['claim_identifier__policy_number'])
+    }}","   POLICY_NUMBER  NOOFCLAIMS
+0    31003000336           2","   POLICY_NUMBER  NUMBER_OF_CLAIMS
+0    31003000336                 1
+1    31003000337                 1","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['claim_identifier__policy_number'] cannot be resolved for metrics ['claims']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'claim_identifier__policy_number':\n    ['claim_identifier__company_claim_number',\n     'claim_identifier__company_subclaim_number',\n     'claim_identifier__policy_coverage_detail',\n     'claim_identifier__claim_identifier',\n     'claim_identifier__claim_description',\n     'claim_identifier__claim_open_date__year'] (InvalidArgument; Prepare)",false,false,"""['NOOFCLAIMS'] not in index""",
+HQLS: What is the total amount of premiums paid by policy number?,What is the total amount of premiums paid by policy number?,"What is the total amount of
+premiums paid by policy number?",1700623276.837507,0,"select policy_number, sum(policy_amount) as TotalPremiumAmount
+from 
+    policy 
+    inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+group by policy_number","SELECT Policy_Number, SUM(Policy_Amount) as Total_Premiums
+FROM Policy 
+JOIN Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+GROUP BY Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","   POLICY_NUMBER  TOTALPREMIUMAMOUNT
+0    31003000336               86000
+1    31003000337               12000","   POLICY_NUMBER  TOTAL_PREMIUMS
+0    31003000336           86000
+1    31003000337           12000","   POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0            31003000336                86000
+1            31003000337                12000",true,true,,
+HQLS: Policy,How many policies do we have?,"How many
+policies do we have?",1700623312.061408,0,"SELECT COUNT(*) AS NoOfPolicy
+FROM policy",SELECT COUNT(*) FROM Policy;,"select * from {{
+    semantic_layer.query(metrics=['number_of_policies'])
+    }}","   NOOFPOLICY
+0           2","   COUNT(*)
+0         2","   NUMBER_OF_POLICIES
+0                   2",true,true,,
+HQLS: Claim,How many claims do we have?,"How many
+claims do we have?",1700623340.1690795,1,"SELECT COUNT(*) AS NoOfClaims
+FROM claim",SELECT COUNT(*) FROM Claim,"select * from {{
+    semantic_layer.query(metrics=['claims'])
+    }}","   NOOFCLAIMS
+0           2","   COUNT(*)
+0         2","   CLAIMS
+0       2",true,true,,
+HQLS: Claim - Loss Payment&Loss Reserve,"What is the total loss amounts, which is the sum of loss payment, loss reserve amount by claim number?","What is the total loss amounts, which is the sum
+of loss payment, loss reserve amount by claim number?",1700623368.8907292,1,"SELECT
+    company_claim_number,
+    (ca_lp.claim_amount + ca_lr.claim_amount ) as LossAmount
+FROM
+    Claim
+    inner join claim_amount ca_lp on claim.claim_identifier = ca_lp.claim_identifier
+    inner JOIN loss_payment ON ca_lp.claim_amount_identifier = loss_payment.claim_amount_identifier
+    inner join claim_amount ca_lr on claim.claim_identifier = ca_lr.claim_identifier
+    inner JOIN loss_reserve ON ca_lr.claim_amount_identifier = loss_reserve.claim_amount_identifier
+","SELECT C.Claim_Identifier, 
+       SUM(LP.Claim_Amount) AS Total_Loss_Payment, 
+       SUM(LR.Claim_Amount) AS Total_Loss_Reserve 
+FROM Claim C 
+LEFT JOIN Claim_Amount LP ON C.Claim_Identifier = LP.Claim_Identifier AND LP.Claim_Amount_Identifier IN (SELECT Claim_Amount_Identifier FROM Loss_Payment)
+LEFT JOIN Claim_Amount LR ON C.Claim_Identifier = LR.Claim_Identifier AND LR.Claim_Amount_Identifier IN (SELECT Claim_Amount_Identifier FROM Loss_Reserve)
+GROUP BY C.Claim_Identifier;","select * from {{
+    semantic_layer.query(metrics=['loss_payment_amount', 'loss_reserve_amount', 'total_loss_amount'], 
+    group_by=['claim_identifier__company_claim_number'])
+    }}","   COMPANY_CLAIM_NUMBER  LOSSAMOUNT
+0              12312701        2200
+1              12312702        4400","   CLAIM_IDENTIFIER  TOTAL_LOSS_PAYMENT  TOTAL_LOSS_RESERVE
+0                 1                1200                1000
+1                 2                2300                2100","   CLAIM_IDENTIFIER__COMPANY_CLAIM_NUMBER  LOSS_PAYMENT_AMOUNT  LOSS_RESERVE_AMOUNT  TOTAL_LOSS_AMOUNT
+0                                12312701                 1200                 1000               2200
+1                                12312702                 2300                 2100               4400",false,true,"""None of [Index(['COMPANY_CLAIM_NUMBER', 'LOSSAMOUNT'], dtype='object')] are in the [columns]""",
+HQLS: What is the average time to settle a claim by policy number?,What is the average time to settle a claim by policy number?,"What is the average time to
+settle a claim by policy number?",1700623415.1036007,1,"select policy_number, avg(DATE_DIFF(claim_open_date, claim_close_date, ""day""))
+from claim 
+inner join claim_coverage on claim.claim_identifier = claim_coverage.claim_identifier
+inner join policy_coverage_detail on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+where claim_close_date IS NOT NULL
+group by policy_number
+","SELECT Policy_Number, AVG(DATEDIFF(day, Claim_Open_Date, Claim_Close_Date)) AS Average_Settlement_Time
+FROM Claim
+JOIN Policy ON Claim.Claim_Identifier = Policy.Policy_Identifier
+WHERE Claim_Status_Code = 'CLOSED'
+GROUP BY Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['avg_time_to_settle_claim'], 
+    group_by=['policy__policy_number'])
+}}","   POLICY_NUMBER  AVG(DATEDIFF(DAY, CLAIM_OPEN_DATE, CLAIM_CLOSE_DATE))
+0    31003000336                                               20.5    ","Empty DataFrame
+Columns: [POLICY_NUMBER, AVERAGE_SETTLEMENT_TIME]
+Index: []","                                                                                                                                                                                                                                                                                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['policy__policy_number'] cannot be resolved for metrics ['avg_time_to_settle_claim']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'policy__policy_number':\n    [] (InvalidArgument; Prepare)",false,false,,
+HQLS: Policy - Coverage - Premium,What is the average policy size which is the the total amount of premium divided by the number of policies?,"What is the average policy size which is the the
+total amount of premium divided by the number of policies?",1700623447.1326866,1,"SELECT
+    SUM(policy_amount)/COUNT(DISTINCT policy_number) AS avgPolicySize
+FROM
+   policy_coverage_detail 
+    inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join policy_amount on policy_coverage_detail.policy_coverage_detail_identifier = policy_amount.policy_coverage_detail_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+","SELECT AVG(Premium_Total) AS Average_Policy_Size
+FROM
+(
+    SELECT Policy_Identifier, SUM(Policy_Amount) AS Premium_Total
+    FROM Policy_Amount
+    INNER JOIN Premium
+    ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+    GROUP BY Policy_Identifier
+) AS SubQuery","select avg(total_policy_amount/number_of_policies) as avg_policy_size from {{
+    semantic_layer.query(metrics=['total_policy_amount', 'number_of_policies'])
+}}","  AVGPOLICYSIZE
+0  49000.000000","  AVERAGE_POLICY_SIZE
+0        49000.000000","        AVG_POLICY_SIZE
+0  2849000.000000000000",true,false,,"""None of [Index(['AVGPOLICYSIZE'], dtype='object')] are in the [columns]"""
+HQLS: Policy - Agent,How many policies have agents sold by agent id?,"How many policies have
+agents sold by agent id?",1700623483.0105703,1,"select  party_identifier as agentid, count(policy.policy_number) as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'AG'
+group by party_identifier","SELECT Agreement_Party_Role.Party_Identifier AS Agent_ID, COUNT(DISTINCT Policy.Policy_Identifier) AS Policies_Sold
+FROM Agreement_Party_Role
+JOIN Policy ON Agreement_Party_Role.Agreement_Identifier = Policy.Policy_Identifier
+WHERE Agreement_Party_Role.Party_Role_Code = 'Agent'
+GROUP BY Agreement_Party_Role.Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'AG'""
+    )}}","   AGENTID  NOOFPOLICIES
+0        2             2","Empty DataFrame
+Columns: [AGENT_ID, POLICIES_SOLD]
+Index: []","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             2                   2",false,true,"""None of [Index(['AGENTID', 'NOOFPOLICIES'], dtype='object')] are in the [columns]""",
+HQLS: What is the total amount of premiums that a policy holder has paid?,What is the total amount of premiums that a policy holder has paid?,"What is the total amount of
+premiums that a policy holder has paid?",1700623518.720413,1,"select party_identifier, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT SUM(Policy_Amount) AS Total_Premiums_Paid
+FROM Premium
+INNER JOIN Policy_Amount ON Premium.Policy_Amount_Identifier = Policy_Amount.Policy_Amount_Identifier
+INNER JOIN Agreement_Party_Role ON Policy_Amount.Policy_Identifier = Agreement_Party_Role.Agreement_Identifier
+WHERE Party_Role_Code = 'PolicyHolder';","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  SUM(POLICY_AMOUNT)
+0                 1               98000","   TOTAL_PREMIUMS_PAID
+0                  NaN","   POLICY__PARTY_IDENTIFIER_DIM  TOTAL_POLICY_AMOUNT
+0                             1                98000",false,true,"""None of [Index(['PARTY_IDENTIFIER', 'SUM(POLICY_AMOUNT)'], dtype='object')] are in the [columns]""",
+HQLS: What is the total amount of premiums that a policy holder has paid by policy number?,What is the total amount of premiums that a policy holder has paid by policy number?,"What is the total amount of premiums that
+a policy holder has paid by policy number?",1700623559.519852,1,"select party_identifier, policy_number, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier, policy_number","SELECT P.Policy_Number, SUM(PA.Policy_Amount) AS Total_Premiums_Paid
+FROM Policy P
+JOIN Policy_Amount PA ON P.Policy_Identifier = PA.Policy_Identifier
+JOIN Premium PR ON PA.Policy_Amount_Identifier = PR.Policy_Amount_Identifier
+GROUP BY P.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number', 'policy__party_identifier_dim'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  POLICY_NUMBER  SUM(POLICY_AMOUNT)
+0                 1    31003000336               86000
+1                 1    31003000337               12000","   POLICY_NUMBER  TOTAL_PREMIUMS_PAID
+0    31003000336                86000
+1    31003000337                12000","   POLICY__PARTY_IDENTIFIER_DIM  POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0                             1            31003000336                86000
+1                             1            31003000337                12000",false,true,"""['PARTY_IDENTIFIER'] not in index""",
+HQLS: Policy - Policy Holder,How many policies does each policy holder have by policy holder id?,"How many policies does each
+policy holder have by policy holder id?",1700623595.6464944,1,"select party_identifier, count( policy.policy_number)  as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT Party_Identifier, COUNT(Policy_Identifier) as Number_of_Policies
+FROM Agreement_Party_Role 
+INNER JOIN Policy ON Agreement_Party_Role.Agreement_Identifier = Policy.Policy_Identifier
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  NOOFPOLICIES
+0                 1             2","   PARTY_IDENTIFIER  NUMBER_OF_POLICIES
+0                 1                   2
+1                 2                   2","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             1                   2",false,true,"""['NOOFPOLICIES'] not in index""",
+HQLS: Policy - Coverage - Claim,How many claims have been placed by policy number?,"How many claims have
+been placed by policy number?",1700623631.500288,1,"select policy_number, count(company_claim_number) as NoOfClaims
+from 
+    policy 
+    inner join policy_coverage_detail on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join claim_coverage on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+    inner join claim on claim.claim_identifier = claim_coverage.claim_identifier
+group by policy_number","SELECT Policy_Number, COUNT(*) as Number_of_Claims
+FROM Claim
+JOIN Policy ON Claim.Claim_Identifier = Policy.Policy_Identifier
+GROUP BY Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['claims'], 
+    group_by=['claim_identifier__policy_number'])
+}}","   POLICY_NUMBER  NOOFCLAIMS
+0    31003000336           2","   POLICY_NUMBER  NUMBER_OF_CLAIMS
+0    31003000336                 1
+1    31003000337                 1","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['claim_identifier__policy_number'] cannot be resolved for metrics ['claims']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'claim_identifier__policy_number':\n    ['claim_identifier__company_claim_number',\n     'claim_identifier__company_subclaim_number',\n     'claim_identifier__policy_coverage_detail',\n     'claim_identifier__claim_identifier',\n     'claim_identifier__claim_description',\n     'claim_identifier__claim_open_date__year'] (InvalidArgument; Prepare)",false,false,"""['NOOFCLAIMS'] not in index""",
+HQLS: What is the total amount of premiums paid by policy number?,What is the total amount of premiums paid by policy number?,"What is the total amount of
+premiums paid by policy number?",1700623662.7942333,1,"select policy_number, sum(policy_amount) as TotalPremiumAmount
+from 
+    policy 
+    inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+group by policy_number","SELECT 
+    Policy.Policy_Number, 
+    SUM(Premium.Policy_Amount) AS Total_Premiums_Paid
+FROM 
+    Policy
+JOIN 
+    Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+JOIN 
+    Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+GROUP BY 
+    Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","   POLICY_NUMBER  TOTALPREMIUMAMOUNT
+0    31003000336               86000
+1    31003000337               12000","                                                                                                                                                    error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 3 at position 8\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","   POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0            31003000336                86000
+1            31003000337                12000",false,true,,
+HQLS: Policy,How many policies do we have?,"How many
+policies do we have?",1700623701.7269492,1,"SELECT COUNT(*) AS NoOfPolicy
+FROM policy",SELECT COUNT(*) FROM Policy,"select * from {{
+    semantic_layer.query(metrics=['number_of_policies'])
+}}","   NOOFPOLICY
+0           2","   COUNT(*)
+0         2","   NUMBER_OF_POLICIES
+0                   2",true,true,,
+HQLS: Claim,How many claims do we have?,"How many
+claims do we have?",1700623729.8140647,2,"SELECT COUNT(*) AS NoOfClaims
+FROM claim",SELECT COUNT(*) FROM Claim,"select * from {{
+    semantic_layer.query(metrics=['claims'])
+}}","   NOOFCLAIMS
+0           2","   COUNT(*)
+0         2","   CLAIMS
+0       2",true,true,,
+HQLS: Claim - Loss Payment&Loss Reserve,"What is the total loss amounts, which is the sum of loss payment, loss reserve amount by claim number?","What is the total loss amounts, which is the sum
+of loss payment, loss reserve amount by claim number?",1700623757.3877194,2,"SELECT
+    company_claim_number,
+    (ca_lp.claim_amount + ca_lr.claim_amount ) as LossAmount
+FROM
+    Claim
+    inner join claim_amount ca_lp on claim.claim_identifier = ca_lp.claim_identifier
+    inner JOIN loss_payment ON ca_lp.claim_amount_identifier = loss_payment.claim_amount_identifier
+    inner join claim_amount ca_lr on claim.claim_identifier = ca_lr.claim_identifier
+    inner JOIN loss_reserve ON ca_lr.claim_amount_identifier = loss_reserve.claim_amount_identifier
+","SELECT Claim_Identifier, SUM(Claim_Amount) as Total_Loss_Amounts
+FROM (
+    SELECT Claim_Identifier, Claim_Amount
+    FROM Loss_Payment
+    UNION ALL
+    SELECT Claim_Identifier, Claim_Amount
+    FROM Loss_Reserve
+) as Losses
+GROUP BY Claim_Identifier;","select * from {{
+    semantic_layer.query(metrics=['loss_payment_amount', 'loss_reserve_amount'], 
+    group_by=['claim_identifier__company_claim_number'])
+}}","   COMPANY_CLAIM_NUMBER  LOSSAMOUNT
+0              12312701        2200
+1              12312702        4400","                                                                                                                                                error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 3 at position 11\ninvalid identifier 'CLAIM_IDENTIFIER' (InvalidArgument; Prepare)","   CLAIM_IDENTIFIER__COMPANY_CLAIM_NUMBER  LOSS_PAYMENT_AMOUNT  LOSS_RESERVE_AMOUNT
+0                                12312701                 1200                 1000
+1                                12312702                 2300                 2100",false,false,,"""['LOSSAMOUNT'] not in index"""
+HQLS: What is the average time to settle a claim by policy number?,What is the average time to settle a claim by policy number?,"What is the average time to
+settle a claim by policy number?",1700623792.8042336,2,"select policy_number, avg(DATE_DIFF(claim_open_date, claim_close_date, ""day""))
+from claim 
+inner join claim_coverage on claim.claim_identifier = claim_coverage.claim_identifier
+inner join policy_coverage_detail on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+where claim_close_date IS NOT NULL
+group by policy_number
+","SELECT 
+    Policy.Policy_Number, 
+    AVG(DATEDIFF(day, Claim.Claim_Open_Date, Claim.Claim_Close_Date)) AS Average_Settlement_Time
+FROM 
+    Claim 
+INNER JOIN 
+    Claim_Coverage ON Claim.Claim_Identifier = Claim_Coverage.Claim_Identifier
+INNER JOIN 
+    Policy_Coverage_Detail ON Claim_Coverage.Policy_Coverage_Detail_Identifier = Policy_Coverage_Detail.Policy_Coverage_Detail_Identifier
+INNER JOIN 
+    Policy ON Policy_Coverage_Detail.Policy_Identifier = Policy.Policy_Identifier
+WHERE 
+    Claim.Claim_Close_Date IS NOT NULL
+GROUP BY 
+    Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['avg_time_to_settle_claim'], 
+    group_by=['policy__policy_number'])
+    }}","   POLICY_NUMBER  AVG(DATEDIFF(DAY, CLAIM_OPEN_DATE, CLAIM_CLOSE_DATE))
+0    31003000336                                               20.5    ","   POLICY_NUMBER AVERAGE_SETTLEMENT_TIME
+0    31003000336               20.500000","                                                                                                                                                                                                                                                                                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['policy__policy_number'] cannot be resolved for metrics ['avg_time_to_settle_claim']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'policy__policy_number':\n    [] (InvalidArgument; Prepare)",true,false,,
+HQLS: Policy - Coverage - Premium,What is the average policy size which is the the total amount of premium divided by the number of policies?,"What is the average policy size which is the the
+total amount of premium divided by the number of policies?",1700623830.3004289,2,"SELECT
+    SUM(policy_amount)/COUNT(DISTINCT policy_number) AS avgPolicySize
+FROM
+   policy_coverage_detail 
+    inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join policy_amount on policy_coverage_detail.policy_coverage_detail_identifier = policy_amount.policy_coverage_detail_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+","SELECT AVG(Total_Premium) AS Average_Policy_Size
+FROM
+(
+    SELECT Policy_Identifier, SUM(Policy_Amount) AS Total_Premium
+    FROM Policy_Amount
+    INNER JOIN Premium
+    ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+    GROUP BY Policy_Identifier
+) AS PolicyPremiums","select * from {{
+    semantic_layer.query(metrics=[Metric('total_policy_amount').sum().alias('total_policy_amount'), Metric('number_of_policies').count().alias('number_of_policies')], 
+    group_by=[Dimension('policy__policy_effective_date').grain('month')],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}
+
+select (total_policy_amount / number_of_policies) as average_policy_size from above_query","  AVGPOLICYSIZE
+0  49000.000000","  AVERAGE_POLICY_SIZE
+0        49000.000000","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    error
+0  INVALID_ARGUMENT: [FlightSQL] Validation errors for executable:\nInvalid method for Metric. Attributes: alias, sum are invalid.\n\nsemantic_layer.query(metrics=[Metric('total_policy_amount').sum().alias('total_policy_amount'), Metric('number_of_policies').count().alias('number_of_policies')], \n                              ^\n                      error found here\n\n\nInvalid method for Metric. Attributes: alias, count are invalid.\n\nsemantic_layer.query(metrics=[Metric('total_policy_amount').sum().alias('total_policy_amount'), Metric('number_of_policies').count().alias('number_of_policies')], \n                                                                                                ^\n                                                                                        error found here\n (InvalidArgument; Prepare)",true,false,,
+HQLS: Policy - Agent,How many policies have agents sold by agent id?,"How many policies have
+agents sold by agent id?",1700623870.8278775,2,"select  party_identifier as agentid, count(policy.policy_number) as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'AG'
+group by party_identifier","SELECT Party_Identifier AS Agent_ID, COUNT(Policy_Identifier) AS Policies_Sold
+FROM Agreement_Party_Role
+WHERE Party_Role_Code = 'Agent'
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'AG'""
+    )}}","   AGENTID  NOOFPOLICIES
+0        2             2","                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 43\ninvalid identifier 'POLICY_IDENTIFIER' (InvalidArgument; Prepare)","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             2                   2",false,true,,
+HQLS: What is the total amount of premiums that a policy holder has paid?,What is the total amount of premiums that a policy holder has paid?,"What is the total amount of
+premiums that a policy holder has paid?",1700623905.491601,2,"select party_identifier, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT SUM(Policy_Amount) AS Total_Premiums_Paid
+FROM Policy_Amount
+INNER JOIN Agreement_Party_Role ON Policy_Amount.Policy_Identifier = Agreement_Party_Role.Agreement_Identifier
+WHERE Party_Role_Code = 'Policy Holder';","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'"")
+}}","   PARTY_IDENTIFIER  SUM(POLICY_AMOUNT)
+0                 1               98000","   TOTAL_PREMIUMS_PAID
+0                  NaN","   TOTAL_POLICY_AMOUNT
+0                98000",false,false,"""None of [Index(['PARTY_IDENTIFIER', 'SUM(POLICY_AMOUNT)'], dtype='object')] are in the [columns]""","""['PARTY_IDENTIFIER'] not in index"""
+HQLS: What is the total amount of premiums that a policy holder has paid by policy number?,What is the total amount of premiums that a policy holder has paid by policy number?,"What is the total amount of premiums that
+a policy holder has paid by policy number?",1700623941.715399,2,"select party_identifier, policy_number, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier, policy_number","SELECT Policy.Policy_Number, SUM(Premium.Policy_Amount) AS Total_Premiums_Paid
+FROM Policy 
+JOIN Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+GROUP BY Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number', 'policy__party_identifier_dim'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  POLICY_NUMBER  SUM(POLICY_AMOUNT)
+0                 1    31003000336               86000
+1                 1    31003000337               12000","                                                                                                                                                     error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 33\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","   POLICY__PARTY_IDENTIFIER_DIM  POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0                             1            31003000336                86000
+1                             1            31003000337                12000",false,true,,
+HQLS: Policy - Policy Holder,How many policies does each policy holder have by policy holder id?,"How many policies does each
+policy holder have by policy holder id?",1700623975.9373305,2,"select party_identifier, count( policy.policy_number)  as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT Party_Identifier AS Policy_Holder_ID, COUNT(Policy_Identifier) AS Number_of_Policies
+FROM Agreement_Party_Role
+INNER JOIN Policy ON Agreement_Party_Role.Agreement_Identifier = Policy.Policy_Identifier
+WHERE Party_Role_Code = 'PolicyHolder'
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  NOOFPOLICIES
+0                 1             2","Empty DataFrame
+Columns: [POLICY_HOLDER_ID, NUMBER_OF_POLICIES]
+Index: []","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             1                   2",false,true,"""None of [Index(['NOOFPOLICIES', 'PARTY_IDENTIFIER'], dtype='object')] are in the [columns]""",
+HQLS: Policy - Coverage - Claim,How many claims have been placed by policy number?,"How many claims have
+been placed by policy number?",1700624012.5996711,2,"select policy_number, count(company_claim_number) as NoOfClaims
+from 
+    policy 
+    inner join policy_coverage_detail on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join claim_coverage on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+    inner join claim on claim.claim_identifier = claim_coverage.claim_identifier
+group by policy_number","SELECT Policy_Number, COUNT(*) as Number_of_Claims
+FROM Claim 
+JOIN Policy ON Claim.Claim_Identifier = Policy.Policy_Identifier
+GROUP BY Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['claims'], 
+    group_by=['claim_identifier__policy_number'])
+}}","   POLICY_NUMBER  NOOFCLAIMS
+0    31003000336           2","   POLICY_NUMBER  NUMBER_OF_CLAIMS
+0    31003000336                 1
+1    31003000337                 1","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['claim_identifier__policy_number'] cannot be resolved for metrics ['claims']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'claim_identifier__policy_number':\n    ['claim_identifier__company_claim_number',\n     'claim_identifier__company_subclaim_number',\n     'claim_identifier__policy_coverage_detail',\n     'claim_identifier__claim_identifier',\n     'claim_identifier__claim_description',\n     'claim_identifier__claim_open_date__year'] (InvalidArgument; Prepare)",false,false,"""['NOOFCLAIMS'] not in index""",
+HQLS: What is the total amount of premiums paid by policy number?,What is the total amount of premiums paid by policy number?,"What is the total amount of
+premiums paid by policy number?",1700624042.8282523,2,"select policy_number, sum(policy_amount) as TotalPremiumAmount
+from 
+    policy 
+    inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+group by policy_number","SELECT Policy.Policy_Number, SUM(Premium.Policy_Amount) AS Total_Premiums
+FROM Policy
+JOIN Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+GROUP BY Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","   POLICY_NUMBER  TOTALPREMIUMAMOUNT
+0    31003000336               86000
+1    31003000337               12000","                                                                                                                                                     error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 33\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","   POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0            31003000336                86000
+1            31003000337                12000",false,true,,
+HQLS: Policy,How many policies do we have?,"How many
+policies do we have?",1700624079.9402833,2,"SELECT COUNT(*) AS NoOfPolicy
+FROM policy",SELECT COUNT(*) FROM Policy,"select * from {{
+    semantic_layer.query(metrics=['number_of_policies'])
+}}","   NOOFPOLICY
+0           2","   COUNT(*)
+0         2","   NUMBER_OF_POLICIES
+0                   2",true,true,,
+HQLS: Claim,How many claims do we have?,"How many
+claims do we have?",1700624107.2168903,3,"SELECT COUNT(*) AS NoOfClaims
+FROM claim",SELECT COUNT(*) FROM Claim;,"select * from {{
+    semantic_layer.query(metrics=['claims'])
+}}","   NOOFCLAIMS
+0           2","   COUNT(*)
+0         2","   CLAIMS
+0       2",true,true,,
+HQLS: Claim - Loss Payment&Loss Reserve,"What is the total loss amounts, which is the sum of loss payment, loss reserve amount by claim number?","What is the total loss amounts, which is the sum
+of loss payment, loss reserve amount by claim number?",1700624134.5123982,3,"SELECT
+    company_claim_number,
+    (ca_lp.claim_amount + ca_lr.claim_amount ) as LossAmount
+FROM
+    Claim
+    inner join claim_amount ca_lp on claim.claim_identifier = ca_lp.claim_identifier
+    inner JOIN loss_payment ON ca_lp.claim_amount_identifier = loss_payment.claim_amount_identifier
+    inner join claim_amount ca_lr on claim.claim_identifier = ca_lr.claim_identifier
+    inner JOIN loss_reserve ON ca_lr.claim_amount_identifier = loss_reserve.claim_amount_identifier
+","SELECT Claim.Claim_Identifier, SUM(Loss_Payment.Claim_Amount + Loss_Reserve.Claim_Amount) AS Total_Loss_Amounts
+FROM Claim
+LEFT JOIN Claim_Amount AS Loss_Payment ON Claim.Claim_Identifier = Loss_Payment.Claim_Identifier AND Loss_Payment.Claim_Amount_Identifier IN (SELECT Claim_Amount_Identifier FROM Loss_Payment)
+LEFT JOIN Claim_Amount AS Loss_Reserve ON Claim.Claim_Identifier = Loss_Reserve.Claim_Identifier AND Loss_Reserve.Claim_Amount_Identifier IN (SELECT Claim_Amount_Identifier FROM Loss_Reserve)
+GROUP BY Claim.Claim_Identifier;","select * from {{
+    semantic_layer.query(metrics=['loss_payment_amount', 'loss_reserve_amount'], 
+    group_by=['claim_identifier__company_claim_number'])
+}}","   COMPANY_CLAIM_NUMBER  LOSSAMOUNT
+0              12312701        2200
+1              12312702        4400","   CLAIM_IDENTIFIER  TOTAL_LOSS_AMOUNTS
+0                 1                2200
+1                 2                4400","   CLAIM_IDENTIFIER__COMPANY_CLAIM_NUMBER  LOSS_PAYMENT_AMOUNT  LOSS_RESERVE_AMOUNT
+0                                12312701                 1200                 1000
+1                                12312702                 2300                 2100",false,false,"""['COMPANY_CLAIM_NUMBER'] not in index""","""['LOSSAMOUNT'] not in index"""
+HQLS: What is the average time to settle a claim by policy number?,What is the average time to settle a claim by policy number?,"What is the average time to
+settle a claim by policy number?",1700624176.227442,3,"select policy_number, avg(DATE_DIFF(claim_open_date, claim_close_date, ""day""))
+from claim 
+inner join claim_coverage on claim.claim_identifier = claim_coverage.claim_identifier
+inner join policy_coverage_detail on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+where claim_close_date IS NOT NULL
+group by policy_number
+","SELECT Policy_Number, AVG(DATEDIFF(day, Claim_Open_Date, Claim_Close_Date)) AS Average_Settlement_Time
+FROM Claim
+JOIN Policy ON Claim.Claim_Identifier = Policy.Policy_Identifier
+WHERE Claim_Status_Code = 'Closed'
+GROUP BY Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['avg_time_to_settle_claim'], 
+    group_by=['policy__policy_number'])
+    }}","   POLICY_NUMBER  AVG(DATEDIFF(DAY, CLAIM_OPEN_DATE, CLAIM_CLOSE_DATE))
+0    31003000336                                               20.5    ","Empty DataFrame
+Columns: [POLICY_NUMBER, AVERAGE_SETTLEMENT_TIME]
+Index: []","                                                                                                                                                                                                                                                                                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['policy__policy_number'] cannot be resolved for metrics ['avg_time_to_settle_claim']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'policy__policy_number':\n    [] (InvalidArgument; Prepare)",false,false,,
+HQLS: Policy - Coverage - Premium,What is the average policy size which is the the total amount of premium divided by the number of policies?,"What is the average policy size which is the the
+total amount of premium divided by the number of policies?",1700624209.533845,3,"SELECT
+    SUM(policy_amount)/COUNT(DISTINCT policy_number) AS avgPolicySize
+FROM
+   policy_coverage_detail 
+    inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join policy_amount on policy_coverage_detail.policy_coverage_detail_identifier = policy_amount.policy_coverage_detail_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+","SELECT AVG(Premium_Size) AS Average_Policy_Size
+FROM
+(
+    SELECT Policy.Policy_Identifier, SUM(Premium.Policy_Amount) AS Premium_Size
+    FROM Policy
+    INNER JOIN Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+    INNER JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+    GROUP BY Policy.Policy_Identifier
+) AS SubQuery","select avg(total_policy_amount / number_of_policies) as avg_policy_size from {{
+    semantic_layer.query(metrics=['total_policy_amount', 'number_of_policies'])
+}}","  AVGPOLICYSIZE
+0  49000.000000","                                                                                                                                                     error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 4 at position 41\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","        AVG_POLICY_SIZE
+0  2849000.000000000000",false,false,,"""None of [Index(['AVGPOLICYSIZE'], dtype='object')] are in the [columns]"""
+HQLS: Policy - Agent,How many policies have agents sold by agent id?,"How many policies have
+agents sold by agent id?",1700624246.509607,3,"select  party_identifier as agentid, count(policy.policy_number) as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'AG'
+group by party_identifier","SELECT Party_Identifier AS Agent_ID, COUNT(DISTINCT Policy_Identifier) AS Policies_Sold
+FROM Agreement_Party_Role
+WHERE Party_Role_Code = 'Agent'
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'AG'"")
+}}","   AGENTID  NOOFPOLICIES
+0        2             2","                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 52\ninvalid identifier 'POLICY_IDENTIFIER' (InvalidArgument; Prepare)","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             2                   2",false,true,,
+HQLS: What is the total amount of premiums that a policy holder has paid?,What is the total amount of premiums that a policy holder has paid?,"What is the total amount of
+premiums that a policy holder has paid?",1700624278.3470273,3,"select party_identifier, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT SUM(Policy_Amount) AS Total_Premiums_Paid
+FROM Premium
+JOIN Policy_Amount ON Premium.Policy_Amount_Identifier = Policy_Amount.Policy_Amount_Identifier
+JOIN Agreement_Party_Role ON Policy_Amount.Policy_Identifier = Agreement_Party_Role.Agreement_Identifier
+WHERE Party_Role_Code = 'Policy Holder';","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  SUM(POLICY_AMOUNT)
+0                 1               98000","   TOTAL_PREMIUMS_PAID
+0                  NaN","   TOTAL_POLICY_AMOUNT
+0                98000",false,false,"""None of [Index(['PARTY_IDENTIFIER', 'SUM(POLICY_AMOUNT)'], dtype='object')] are in the [columns]""","""['PARTY_IDENTIFIER'] not in index"""
+HQLS: What is the total amount of premiums that a policy holder has paid by policy number?,What is the total amount of premiums that a policy holder has paid by policy number?,"What is the total amount of premiums that
+a policy holder has paid by policy number?",1700624315.201009,3,"select party_identifier, policy_number, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier, policy_number","SELECT Policy.Policy_Number, SUM(Premium.Policy_Amount) AS Total_Premiums_Paid
+FROM Policy
+JOIN Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+GROUP BY Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number', 'policy__party_identifier_dim'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  POLICY_NUMBER  SUM(POLICY_AMOUNT)
+0                 1    31003000336               86000
+1                 1    31003000337               12000","                                                                                                                                                     error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 33\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","   POLICY__PARTY_IDENTIFIER_DIM  POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0                             1            31003000336                86000
+1                             1            31003000337                12000",false,true,,
+HQLS: Policy - Policy Holder,How many policies does each policy holder have by policy holder id?,"How many policies does each
+policy holder have by policy holder id?",1700624350.9297643,3,"select party_identifier, count( policy.policy_number)  as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT Party_Identifier AS Policy_Holder_ID, COUNT(Policy_Identifier) AS Number_of_Policies
+FROM Agreement_Party_Role
+INNER JOIN Policy ON Agreement_Party_Role.Agreement_Identifier = Policy.Policy_Identifier
+WHERE Party_Role_Code = 'PolicyHolder'
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  NOOFPOLICIES
+0                 1             2","Empty DataFrame
+Columns: [POLICY_HOLDER_ID, NUMBER_OF_POLICIES]
+Index: []","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             1                   2",false,true,"""None of [Index(['NOOFPOLICIES', 'PARTY_IDENTIFIER'], dtype='object')] are in the [columns]""",
+HQLS: Policy - Coverage - Claim,How many claims have been placed by policy number?,"How many claims have
+been placed by policy number?",1700624385.3102484,3,"select policy_number, count(company_claim_number) as NoOfClaims
+from 
+    policy 
+    inner join policy_coverage_detail on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join claim_coverage on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+    inner join claim on claim.claim_identifier = claim_coverage.claim_identifier
+group by policy_number","SELECT Policy.Policy_Number, COUNT(Claim.Claim_Identifier) AS Number_of_Claims
+FROM Claim
+JOIN Claim_Coverage ON Claim.Claim_Identifier = Claim_Coverage.Claim_Identifier
+JOIN Policy_Coverage_Detail ON Claim_Coverage.Policy_Coverage_Detail_Identifier = Policy_Coverage_Detail.Policy_Coverage_Detail_Identifier
+JOIN Policy ON Policy_Coverage_Detail.Policy_Identifier = Policy.Policy_Identifier
+GROUP BY Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['claims'], 
+    group_by=['claim_identifier__policy_number'])
+    }}","   POLICY_NUMBER  NOOFCLAIMS
+0    31003000336           2","   POLICY_NUMBER  NUMBER_OF_CLAIMS
+0    31003000336                 2","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['claim_identifier__policy_number'] cannot be resolved for metrics ['claims']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'claim_identifier__policy_number':\n    ['claim_identifier__company_claim_number',\n     'claim_identifier__company_subclaim_number',\n     'claim_identifier__policy_coverage_detail',\n     'claim_identifier__claim_identifier',\n     'claim_identifier__claim_description',\n     'claim_identifier__claim_open_date__year'] (InvalidArgument; Prepare)",true,false,,
+HQLS: What is the total amount of premiums paid by policy number?,What is the total amount of premiums paid by policy number?,"What is the total amount of
+premiums paid by policy number?",1700624421.9077234,3,"select policy_number, sum(policy_amount) as TotalPremiumAmount
+from 
+    policy 
+    inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+group by policy_number","SELECT Policy.Policy_Number, SUM(Premium.Policy_Amount) as Total_Premiums_Paid
+FROM Policy 
+INNER JOIN Policy_Amount ON Policy.Policy_Identifier = Policy_Amount.Policy_Identifier
+INNER JOIN Premium ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+GROUP BY Policy.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","   POLICY_NUMBER  TOTALPREMIUMAMOUNT
+0    31003000336               86000
+1    31003000337               12000","                                                                                                                                                     error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 33\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","   POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0            31003000336                86000
+1            31003000337                12000",false,true,,
+HQLS: Policy,How many policies do we have?,"How many
+policies do we have?",1700624455.6918333,3,"SELECT COUNT(*) AS NoOfPolicy
+FROM policy",SELECT COUNT(*) FROM Policy,"select * from {{
+    semantic_layer.query(metrics=['number_of_policies'])
+    }}","   NOOFPOLICY
+0           2","   COUNT(*)
+0         2","   NUMBER_OF_POLICIES
+0                   2",true,true,,
+HQLS: Claim,How many claims do we have?,"How many
+claims do we have?",1700624485.3053405,4,"SELECT COUNT(*) AS NoOfClaims
+FROM claim",SELECT COUNT(*) FROM Claim;,"select * from {{
+    semantic_layer.query(metrics=['claims'])
+}}","   NOOFCLAIMS
+0           2","   COUNT(*)
+0         2","   CLAIMS
+0       2",true,true,,
+HQLS: Claim - Loss Payment&Loss Reserve,"What is the total loss amounts, which is the sum of loss payment, loss reserve amount by claim number?","What is the total loss amounts, which is the sum
+of loss payment, loss reserve amount by claim number?",1700624513.501299,4,"SELECT
+    company_claim_number,
+    (ca_lp.claim_amount + ca_lr.claim_amount ) as LossAmount
+FROM
+    Claim
+    inner join claim_amount ca_lp on claim.claim_identifier = ca_lp.claim_identifier
+    inner JOIN loss_payment ON ca_lp.claim_amount_identifier = loss_payment.claim_amount_identifier
+    inner join claim_amount ca_lr on claim.claim_identifier = ca_lr.claim_identifier
+    inner JOIN loss_reserve ON ca_lr.claim_amount_identifier = loss_reserve.claim_amount_identifier
+","SELECT Claim.Claim_Identifier, SUM(Loss_Payment.Claim_Amount + Loss_Reserve.Claim_Amount) AS Total_Loss_Amounts
+FROM Claim
+LEFT JOIN Claim_Amount AS Loss_Payment ON Claim.Claim_Identifier = Loss_Payment.Claim_Identifier
+LEFT JOIN Claim_Amount AS Loss_Reserve ON Claim.Claim_Identifier = Loss_Reserve.Claim_Identifier
+GROUP BY Claim.Claim_Identifier;","select * from {{
+    semantic_layer.query(metrics=['loss_payment_amount', 'loss_reserve_amount'], 
+    group_by=['claim_identifier__company_claim_number'])
+    }}","   COMPANY_CLAIM_NUMBER  LOSSAMOUNT
+0              12312701        2200
+1              12312702        4400","   CLAIM_IDENTIFIER  TOTAL_LOSS_AMOUNTS
+0                 1               36800
+1                 2               72000","   CLAIM_IDENTIFIER__COMPANY_CLAIM_NUMBER  LOSS_PAYMENT_AMOUNT  LOSS_RESERVE_AMOUNT
+0                                12312701                 1200                 1000
+1                                12312702                 2300                 2100",false,false,"""None of [Index(['COMPANY_CLAIM_NUMBER', 'LOSSAMOUNT'], dtype='object')] are in the [columns]""","""['LOSSAMOUNT'] not in index"""
+HQLS: What is the average time to settle a claim by policy number?,What is the average time to settle a claim by policy number?,"What is the average time to
+settle a claim by policy number?",1700624551.5143218,4,"select policy_number, avg(DATE_DIFF(claim_open_date, claim_close_date, ""day""))
+from claim 
+inner join claim_coverage on claim.claim_identifier = claim_coverage.claim_identifier
+inner join policy_coverage_detail on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+where claim_close_date IS NOT NULL
+group by policy_number
+","SELECT Policy.Policy_Number, AVG(DATEDIFF(day, Claim.Claim_Open_Date, Claim.Claim_Close_Date)) AS Average_Settlement_Time
+FROM Claim
+INNER JOIN Claim_Coverage ON Claim.Claim_Identifier = Claim_Coverage.Claim_Identifier
+INNER JOIN Policy_Coverage_Detail ON Claim_Coverage.Policy_Coverage_Detail_Identifier = Policy_Coverage_Detail.Policy_Coverage_Detail_Identifier
+INNER JOIN Policy ON Policy_Coverage_Detail.Policy_Identifier = Policy.Policy_Identifier
+WHERE Claim.Claim_Close_Date IS NOT NULL
+GROUP BY Policy.Policy_Number","select * from {{
+    semantic_layer.query(metrics=['avg_time_to_settle_claim'], 
+    group_by=['policy__policy_number'])
+    }}","   POLICY_NUMBER  AVG(DATEDIFF(DAY, CLAIM_OPEN_DATE, CLAIM_CLOSE_DATE))
+0    31003000336                                               20.5    ","   POLICY_NUMBER AVERAGE_SETTLEMENT_TIME
+0    31003000336               20.500000","                                                                                                                                                                                                                                                                                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['policy__policy_number'] cannot be resolved for metrics ['avg_time_to_settle_claim']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'policy__policy_number':\n    [] (InvalidArgument; Prepare)",true,false,,
+HQLS: Policy - Coverage - Premium,What is the average policy size which is the the total amount of premium divided by the number of policies?,"What is the average policy size which is the the
+total amount of premium divided by the number of policies?",1700624592.5266023,4,"SELECT
+    SUM(policy_amount)/COUNT(DISTINCT policy_number) AS avgPolicySize
+FROM
+   policy_coverage_detail 
+    inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join policy_amount on policy_coverage_detail.policy_coverage_detail_identifier = policy_amount.policy_coverage_detail_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+","SELECT AVG(Premium_Total / Policy_Count) AS Average_Policy_Size
+FROM
+(
+    SELECT SUM(Policy_Amount) AS Premium_Total, COUNT(Policy_Identifier) AS Policy_Count
+    FROM Policy_Amount
+    INNER JOIN Premium
+    ON Policy_Amount.Policy_Amount_Identifier = Premium.Policy_Amount_Identifier
+    GROUP BY Policy_Identifier
+) AS SubQuery
+","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount', 'number_of_policies'], 
+    group_by=[Dimension('metric_time').grain('month')],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","  AVGPOLICYSIZE
+0  49000.000000","  AVERAGE_POLICY_SIZE
+0  14600.000000000000","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['policy_amount__has_premium'] cannot be resolved for metrics ['number_of_policies', 'total_policy_amount']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'policy_amount__has_premium':\n    ['policy__claim',\n     'policy__year_built__year',\n     'policy__expiration_date__quarter',\n     'policy__expiration_date__year',\n     'policy__status_code',\n     'policy__expiration_date__day'] (InvalidArgument; Prepare)",false,false,"""None of [Index(['AVGPOLICYSIZE'], dtype='object')] are in the [columns]""",
+HQLS: Policy - Agent,How many policies have agents sold by agent id?,"How many policies have
+agents sold by agent id?",1700624629.805193,4,"select  party_identifier as agentid, count(policy.policy_number) as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'AG'
+group by party_identifier","SELECT Party_Identifier AS Agent_ID, COUNT(Policy_Identifier) AS Policies_Sold
+FROM Agreement_Party_Role
+WHERE Party_Role_Code = 'Agent'
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'AG'""
+    )}}","   AGENTID  NOOFPOLICIES
+0        2             2","                                                                                                                                                 error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 43\ninvalid identifier 'POLICY_IDENTIFIER' (InvalidArgument; Prepare)","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             2                   2",false,true,,
+HQLS: What is the total amount of premiums that a policy holder has paid?,What is the total amount of premiums that a policy holder has paid?,"What is the total amount of
+premiums that a policy holder has paid?",1700624662.7146602,4,"select party_identifier, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT SUM(Policy_Amount) AS Total_Premiums_Paid
+FROM Premium
+INNER JOIN Policy_Amount ON Premium.Policy_Amount_Identifier = Policy_Amount.Policy_Amount_Identifier
+WHERE Amount_Type_Code = 'Premium';","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1 AND {{ Dimension('policy__party_role_code') }} = 'PH'"")
+    }}","   PARTY_IDENTIFIER  SUM(POLICY_AMOUNT)
+0                 1               98000","   TOTAL_PREMIUMS_PAID
+0                  NaN","   TOTAL_POLICY_AMOUNT
+0                98000",false,false,"""None of [Index(['PARTY_IDENTIFIER', 'SUM(POLICY_AMOUNT)'], dtype='object')] are in the [columns]""","""['PARTY_IDENTIFIER'] not in index"""
+HQLS: What is the total amount of premiums that a policy holder has paid by policy number?,What is the total amount of premiums that a policy holder has paid by policy number?,"What is the total amount of premiums that
+a policy holder has paid by policy number?",1700624697.473018,4,"select party_identifier, policy_number, sum(policy_amount)
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier, policy_number","SELECT P.Policy_Number, SUM(PA.Policy_Amount) as Total_Premiums
+FROM Policy P
+JOIN Policy_Amount PA ON P.Policy_Identifier = PA.Policy_Identifier
+JOIN Premium PR ON PA.Policy_Amount_Identifier = PR.Policy_Amount_Identifier
+GROUP BY P.Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","   PARTY_IDENTIFIER  POLICY_NUMBER  SUM(POLICY_AMOUNT)
+0                 1    31003000336               86000
+1                 1    31003000337               12000","   POLICY_NUMBER  TOTAL_PREMIUMS
+0    31003000336           86000
+1    31003000337           12000","   POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0            31003000336                86000
+1            31003000337                12000",false,false,"""['PARTY_IDENTIFIER'] not in index""","""['PARTY_IDENTIFIER'] not in index"""
+HQLS: Policy - Policy Holder,How many policies does each policy holder have by policy holder id?,"How many policies does each
+policy holder have by policy holder id?",1700624732.3619785,4,"select party_identifier, count( policy.policy_number)  as NoOfPolicies
+from agreement_party_role
+join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+where agreement_party_role.party_role_code = 'PH'
+group by party_identifier","SELECT Party_Identifier AS Policy_Holder_ID, COUNT(Policy_Identifier) AS Number_of_Policies
+FROM Agreement_Party_Role 
+INNER JOIN Policy ON Agreement_Party_Role.Agreement_Identifier = Policy.Policy_Identifier
+GROUP BY Party_Identifier;","select * from {{
+    semantic_layer.query(metrics=['number_of_policies'], 
+    group_by=['policy__party_identifier_dim'],
+    where=""{{ Dimension('policy__party_role_code') }} = 'PH'""
+    )}}","   PARTY_IDENTIFIER  NOOFPOLICIES
+0                 1             2","   POLICY_HOLDER_ID  NUMBER_OF_POLICIES
+0                 1                   2
+1                 2                   2","   POLICY__PARTY_IDENTIFIER_DIM  NUMBER_OF_POLICIES
+0                             1                   2",false,true,"""None of [Index(['NOOFPOLICIES', 'PARTY_IDENTIFIER'], dtype='object')] are in the [columns]""",
+HQLS: Policy - Coverage - Claim,How many claims have been placed by policy number?,"How many claims have
+been placed by policy number?",1700624767.3834708,4,"select policy_number, count(company_claim_number) as NoOfClaims
+from 
+    policy 
+    inner join policy_coverage_detail on policy.policy_identifier = policy_coverage_detail.policy_identifier
+    inner join claim_coverage on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+    inner join claim on claim.claim_identifier = claim_coverage.claim_identifier
+group by policy_number","SELECT Policy_Number, COUNT(*) as Number_of_Claims
+FROM Claim
+JOIN Policy ON Claim.Claim_Identifier = Policy.Policy_Identifier
+GROUP BY Policy_Number;","select * from {{
+    semantic_layer.query(metrics=['claims'], 
+    group_by=['claim_identifier__policy_number'])
+    }}","   POLICY_NUMBER  NOOFCLAIMS
+0    31003000336           2","   POLICY_NUMBER  NUMBER_OF_CLAIMS
+0    31003000336                 1
+1    31003000337                 1","                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          error
+0  INVALID_ARGUMENT: [FlightSQL] Unable To Satisfy Query Error: Dimensions ['claim_identifier__policy_number'] cannot be resolved for metrics ['claims']. The invalid dimension may not exist, require an ambiguous join (e.g. a join path that can be satisfied in multiple ways), or require a fanout join.\n\nSuggestions for invalid dimension 'claim_identifier__policy_number':\n    ['claim_identifier__company_claim_number',\n     'claim_identifier__company_subclaim_number',\n     'claim_identifier__policy_coverage_detail',\n     'claim_identifier__claim_identifier',\n     'claim_identifier__claim_description',\n     'claim_identifier__claim_open_date__year'] (InvalidArgument; Prepare)",false,false,"""['NOOFCLAIMS'] not in index""",
+HQLS: What is the total amount of premiums paid by policy number?,What is the total amount of premiums paid by policy number?,"What is the total amount of
+premiums paid by policy number?",1700624796.6190119,4,"select policy_number, sum(policy_amount) as TotalPremiumAmount
+from 
+    policy 
+    inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+    inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+group by policy_number","SELECT Policy.Policy_Number, SUM(Premium.Policy_Amount) AS Total_Premiums_Paid
+FROM Premium
+INNER JOIN Policy_Amount ON Premium.Policy_Amount_Identifier = Policy_Amount.Policy_Amount_Identifier
+INNER JOIN Policy ON Policy_Amount.Policy_Identifier = Policy.Policy_Identifier
+GROUP BY Policy.Policy_Number","select * from {{
+    semantic_layer.query(metrics=['total_policy_amount'], 
+    group_by=['policy__policy_number'],
+    where=""{{ Dimension('policy_amount__has_premium') }} = 1""
+    )}}","   POLICY_NUMBER  TOTALPREMIUMAMOUNT
+0    31003000336               86000
+1    31003000337               12000","                                                                                                                                                     error
+0  INVALID_ARGUMENT: [FlightSQL] SQL compilation error: error line 1 at position 33\ninvalid identifier 'PREMIUM.POLICY_AMOUNT' (InvalidArgument; Prepare)","   POLICY__POLICY_NUMBER  TOTAL_POLICY_AMOUNT
+0            31003000336                86000
+1            31003000337                12000",false,true,,
+HQLS: Policy,How many policies do we have?,"How many
+policies do we have?",1700624828.4920971,4,"SELECT COUNT(*) AS NoOfPolicy
+FROM policy",SELECT COUNT(*) FROM Policy;,"select * from {{
+    semantic_layer.query(metrics=['number_of_policies'])
+}}","   NOOFPOLICY
+0           2","   COUNT(*)
+0         2","   NUMBER_OF_POLICIES
+0                   2",true,true,,
